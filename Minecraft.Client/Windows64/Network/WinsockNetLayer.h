@@ -31,6 +31,7 @@ struct Win64LANBroadcast
 	DWORD texturePackParentId;
 	BYTE subTexturePackId;
 	BYTE isJoinable;
+	char playerNames[8][XUSER_NAME_SIZE];
 };
 #pragma pack(pop)
 
@@ -47,6 +48,7 @@ struct Win64LANSession
 	unsigned char subTexturePackId;
 	bool isJoinable;
 	DWORD lastSeenTick;
+	char playerNames[8][XUSER_NAME_SIZE];
 };
 
 struct Win64RemoteConnection
@@ -88,6 +90,7 @@ public:
 	static void StopAdvertising();
 	static void UpdateAdvertisePlayerCount(BYTE count);
 	static void UpdateAdvertiseJoinable(bool joinable);
+	static void UpdateAdvertisePlayerNames(BYTE count, const char playerNames[][XUSER_NAME_SIZE]);
 
 	static bool StartDiscovery();
 	static void StopDiscovery();

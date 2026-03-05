@@ -105,6 +105,21 @@ void UIScene_JoinMenu::tick()
 				break;
 			}
 		}
+#elif defined(_WINDOWS64)
+		for( int i = 0; i < MINECRAFT_NET_MAX_PLAYERS; i++ )
+		{
+			if( m_selectedSession->data.players[i] != 0 && m_selectedSession->data.szPlayers[i][0] != 0 )
+			{
+				string playerName(m_selectedSession->data.szPlayers[i], XUSER_NAME_SIZE);
+				size_t end = playerName.find('\0');
+				if (end != string::npos) playerName.resize(end);
+				m_buttonListPlayers.addItem(playerName);
+			}
+			else
+			{
+				break;
+			}
+		}
 #endif
 
 		m_labelLabels[eLabel_Difficulty].init(app.GetString(IDS_LABEL_DIFFICULTY));
@@ -579,7 +594,30 @@ void UIScene_JoinMenu::handleTimerComplete(int id)
 				}
 				playersList.SetCurSel(selectedIndex);
 			}
+#elif defined(_WINDOWS64)
+			{
+				bool success = g_NetworkManager.GetGameSessionInfo(m_iPad, m_selectedSession->sessionId, m_selectedSession);
+				if (success)
+				{
+					m_buttonListPlayers.clearList();
+					for (unsigned int i = 0; i < MINECRAFT_NET_MAX_PLAYERS; ++i)
+					{
+						if (m_selectedSession->data.players[i] != 0 && m_selectedSession->data.szPlayers[i][0] != 0)
+						{
+							string playerName(m_selectedSession->data.szPlayers[i], XUSER_NAME_SIZE);
+							size_t end = playerName.find('\0');
+							if (end != string::npos) playerName.resize(end);
+							m_buttonListPlayers.addItem(playerName);
+						}
+						else
+						{
+							break;
+						}
+					}
+				}
+			}
 #endif
+			addTimer(UPDATE_PLAYERS_TIMER_ID, UPDATE_PLAYERS_TIMER_TIME);
 		}
 		break;
 	};

@@ -106,6 +106,7 @@ void PlayerList::placeNewPlayer(Connection *connection, shared_ptr<ServerPlayer>
 			NetworkPlayerXbox *nxp = (NetworkPlayerXbox *)networkPlayer;
 			IQNetPlayer *qnp = nxp->GetQNetPlayer();
 			wcsncpy_s(qnp->m_gamertag, 32, player->name.c_str(), _TRUNCATE);
+			g_NetworkManager.UpdateAndSetGameSessionData();
 		}
 #endif
 

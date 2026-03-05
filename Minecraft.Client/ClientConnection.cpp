@@ -775,9 +775,13 @@ void ClientConnection::handleAddPlayer(shared_ptr<AddPlayerPacket> packet)
 			{
 				NetworkPlayerXbox *npx = (NetworkPlayerXbox *)np;
 				IQNetPlayer *qp = npx->GetQNetPlayer();
-				if (qp != NULL && qp->m_gamertag[0] == 0)
+				if (qp != NULL)
 				{
 					wcsncpy_s(qp->m_gamertag, 32, packet->name.c_str(), _TRUNCATE);
+					if (g_NetworkManager.IsHost())
+					{
+						g_NetworkManager.UpdateAndSetGameSessionData();
+					}
 				}
 			}
 		}

@@ -243,7 +243,8 @@ bool WinsockNetLayer::JoinGame(const char *ip, int port)
 
 	bool connected = false;
 	BYTE assignedSmallId = 0;
-	const int maxAttempts = 12;
+	const int maxAttempts = 3;
+	const int connectTimeoutMs = 3000;
 
 	for (int attempt = 0; attempt < maxAttempts; ++attempt)
 	{
@@ -257,16 +258,59 @@ bool WinsockNetLayer::JoinGame(const char *ip, int port)
 		int noDelay = 1;
 		setsockopt(s_hostConnectionSocket, IPPROTO_TCP, TCP_NODELAY, (const char *)&noDelay, sizeof(noDelay));
 
+		u_long nonBlocking = 1;
+		ioctlsocket(s_hostConnectionSocket, FIONBIO, &nonBlocking);
+
 		iResult = connect(s_hostConnectionSocket, result->ai_addr, (int)result->ai_addrlen);
 		if (iResult == SOCKET_ERROR)
 		{
 			int err = WSAGetLastError();
-			app.DebugPrintf("connect() to %s:%d failed (attempt %d/%d): %d\n", ip, port, attempt + 1, maxAttempts, err);
-			closesocket(s_hostConnectionSocket);
-			s_hostConnectionSocket = INVALID_SOCKET;
-			Sleep(200);
-			continue;
+			if (err == WSAEWOULDBLOCK)
+			{
+				fd_set writeFds, exceptFds;
+				FD_ZERO(&writeFds);
+				FD_ZERO(&exceptFds);
+				FD_SET(s_hostConnectionSocket, &writeFds);
+				FD_SET(s_hostConnectionSocket, &exceptFds);
+
+				struct timeval tv;
+				tv.tv_sec = connectTimeoutMs / 1000;
+				tv.tv_usec = (connectTimeoutMs % 1000) * 1000;
+
+				int selectResult = select(0, NULL, &writeFds, &exceptFds, &tv);
+				if (selectResult <= 0 || FD_ISSET(s_hostConnectionSocket, &exceptFds))
+				{
+					app.DebugPrintf("connect() to %s:%d timed out or failed (attempt %d/%d)\n", ip, port, attempt + 1, maxAttempts);
+					closesocket(s_hostConnectionSocket);
+					s_hostConnectionSocket = INVALID_SOCKET;
+					continue;
+				}
+
+				int sockErr = 0;
+				int sockErrLen = sizeof(sockErr);
+				getsockopt(s_hostConnectionSocket, SOL_SOCKET, SO_ERROR, (char *)&sockErr, &sockErrLen);
+				if (sockErr != 0)
+				{
+					app.DebugPrintf("connect() to %s:%d failed with SO_ERROR %d (attempt %d/%d)\n", ip, port, sockErr, attempt + 1, maxAttempts);
+					closesocket(s_hostConnectionSocket);
+					s_hostConnectionSocket = INVALID_SOCKET;
+					continue;
+				}
+			}
+			else
+			{
+				app.DebugPrintf("connect() to %s:%d failed (attempt %d/%d): %d\n", ip, port, attempt + 1, maxAttempts, err);
+				closesocket(s_hostConnectionSocket);
+				s_hostConnectionSocket = INVALID_SOCKET;
+				continue;
+			}
 		}
+
+		u_long blocking = 0;
+		ioctlsocket(s_hostConnectionSocket, FIONBIO, &blocking);
+
+		DWORD recvTimeout = 3000;
+		setsockopt(s_hostConnectionSocket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&recvTimeout, sizeof(recvTimeout));
 
 		BYTE assignBuf[1];
 		int bytesRecv = recv(s_hostConnectionSocket, (char *)assignBuf, 1, 0);
@@ -275,7 +319,6 @@ bool WinsockNetLayer::JoinGame(const char *ip, int port)
 			app.DebugPrintf("Failed to receive small ID assignment from host (attempt %d/%d)\n", attempt + 1, maxAttempts);
 			closesocket(s_hostConnectionSocket);
 			s_hostConnectionSocket = INVALID_SOCKET;
-			Sleep(200);
 			continue;
 		}
 
@@ -714,6 +757,18 @@ void WinsockNetLayer::UpdateAdvertisePlayerCount(BYTE count)
 	LeaveCriticalSection(&s_advertiseLock);
 }
 
+void WinsockNetLayer::UpdateAdvertisePlayerNames(BYTE count, const char playerNames[][XUSER_NAME_SIZE])
+{
+	EnterCriticalSection(&s_advertiseLock);
+	memset(s_advertiseData.playerNames, 0, sizeof(s_advertiseData.playerNames));
+	s_advertiseData.playerCount = count;
+	for (int i = 0; i < count && i < 8; i++)
+	{
+		memcpy(s_advertiseData.playerNames[i], playerNames[i], XUSER_NAME_SIZE);
+	}
+	LeaveCriticalSection(&s_advertiseLock);
+}
+
 void WinsockNetLayer::UpdateAdvertiseJoinable(bool joinable)
 {
 	EnterCriticalSection(&s_advertiseLock);
@@ -821,7 +876,7 @@ std::vector<Win64LANSession> WinsockNetLayer::GetDiscoveredSessions()
 
 DWORD WINAPI WinsockNetLayer::DiscoveryThreadProc(LPVOID param)
 {
-	char recvBuf[512];
+	char recvBuf[1024];
 
 	while (s_discovering)
 	{
@@ -865,6 +920,7 @@ DWORD WINAPI WinsockNetLayer::DiscoveryThreadProc(LPVOID param)
 				s_discoveredSessions[i].subTexturePackId = broadcast->subTexturePackId;
 				s_discoveredSessions[i].isJoinable = (broadcast->isJoinable != 0);
 				s_discoveredSessions[i].lastSeenTick = now;
+				memcpy(s_discoveredSessions[i].playerNames, broadcast->playerNames, sizeof(broadcast->playerNames));
 				found = true;
 				break;
 			}
@@ -885,6 +941,7 @@ DWORD WINAPI WinsockNetLayer::DiscoveryThreadProc(LPVOID param)
 			session.subTexturePackId = broadcast->subTexturePackId;
 			session.isJoinable = (broadcast->isJoinable != 0);
 			session.lastSeenTick = now;
+			memcpy(session.playerNames, broadcast->playerNames, sizeof(broadcast->playerNames));
 			s_discoveredSessions.push_back(session);
 
 			app.DebugPrintf("Win64 LAN: Discovered game \"%ls\" at %s:%d\n",

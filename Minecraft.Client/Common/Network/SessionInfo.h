@@ -77,6 +77,9 @@ typedef struct _GameSessionData
 	unsigned char playerCount;
 	unsigned char maxPlayers;
 
+	GameSessionUID players[MINECRAFT_NET_MAX_PLAYERS];
+	char szPlayers[MINECRAFT_NET_MAX_PLAYERS][XUSER_NAME_SIZE];
+
 	_GameSessionData()
 	{
 		netVersion = 0;
@@ -90,6 +93,8 @@ typedef struct _GameSessionData
 		memset(hostName, 0, sizeof(hostName));
 		playerCount = 0;
 		maxPlayers = MINECRAFT_NET_MAX_PLAYERS;
+		memset(players, 0, sizeof(players));
+		memset(szPlayers, 0, sizeof(szPlayers));
 	}
 } GameSessionData;
 #endif

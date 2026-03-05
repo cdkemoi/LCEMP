@@ -94,7 +94,7 @@ void CPlatformNetworkManagerStub::NotifyPlayerJoined(IQNetPlayer *pQNetPlayer	)
 	if( m_pIQNet->IsHost() )
 	{
 		// 4J-PB - only the host should do this
-//		g_NetworkManager.UpdateAndSetGameSessionData();
+		g_NetworkManager.UpdateAndSetGameSessionData();
 		SystemFlagAddPlayer( networkPlayer );
 	}
 	
@@ -140,6 +140,11 @@ void CPlatformNetworkManagerStub::NotifyPlayerLeaving(IQNetPlayer *pQNetPlayer)
 	}
 
 	g_NetworkManager.PlayerLeaving(networkPlayer);
+
+	if (m_pIQNet->IsHost())
+	{
+		g_NetworkManager.UpdateAndSetGameSessionData(networkPlayer);
+	}
 
 	for (int idx = 0; idx < XUSER_MAX_COUNT; ++idx)
 	{
@@ -503,44 +508,50 @@ bool CPlatformNetworkManagerStub::_RunNetworkGame()
 
 void CPlatformNetworkManagerStub::UpdateAndSetGameSessionData(INetworkPlayer *pNetworkPlayerLeaving /*= NULL*/)
 {
-// 	DWORD playerCount = m_pIQNet->GetPlayerCount();
-// 
-// 	if( this->m_bLeavingGame )
-// 		return;
-// 
-// 	if( GetHostPlayer() == NULL )
-// 		return;
-// 
-// 	for(unsigned int i = 0; i < MINECRAFT_NET_MAX_PLAYERS; ++i)
-// 	{
-// 		if( i < playerCount )
-// 		{
-// 			INetworkPlayer *pNetworkPlayer = GetPlayerByIndex(i);
-// 
-// 			// We can call this from NotifyPlayerLeaving but at that point the player is still considered in the session
-// 			if( pNetworkPlayer != pNetworkPlayerLeaving )
-// 			{
-// 				m_hostGameSessionData.players[i] = ((NetworkPlayerXbox *)pNetworkPlayer)->GetUID();
-// 
-// 				char *temp;
-// 				temp = (char *)wstringtofilename( pNetworkPlayer->GetOnlineName() );
-// 				memcpy(m_hostGameSessionData.szPlayers[i],temp,XUSER_NAME_SIZE);
-// 			}
-// 			else
-// 			{
-// 				m_hostGameSessionData.players[i] = NULL;
-// 				memset(m_hostGameSessionData.szPlayers[i],0,XUSER_NAME_SIZE);
-// 			}
-// 		}
-// 		else
-// 		{
-// 			m_hostGameSessionData.players[i] = NULL;
-// 			memset(m_hostGameSessionData.szPlayers[i],0,XUSER_NAME_SIZE);
-// 		}
-// 	}
-// 
-// 	m_hostGameSessionData.hostPlayerUID = ((NetworkPlayerXbox *)GetHostPlayer())->GetQNetPlayer()->GetXuid();
-// 	m_hostGameSessionData.m_uiGameHostSettings = app.GetGameHostOption(eGameHostOption_All);
+#ifdef _WINDOWS64
+	if (this->m_bLeavingGame)
+		return;
+
+	if (!m_pIQNet->IsHost())
+		return;
+
+	DWORD playerCount = m_pIQNet->GetPlayerCount();
+
+	m_hostGameSessionData.m_uiGameHostSettings = app.GetGameHostOption(eGameHostOption_All);
+	m_hostGameSessionData.playerCount = (unsigned char)playerCount;
+
+	for (unsigned int i = 0; i < MINECRAFT_NET_MAX_PLAYERS; ++i)
+	{
+		if (i < playerCount)
+		{
+			INetworkPlayer *pNetworkPlayer = GetPlayerByIndex(i);
+
+			if (pNetworkPlayer != NULL && pNetworkPlayer != pNetworkPlayerLeaving)
+			{
+				m_hostGameSessionData.players[i] = (GameSessionUID)(i + 1);
+
+				const wchar_t *name = pNetworkPlayer->GetOnlineName();
+				char nameBuf[XUSER_NAME_SIZE];
+				memset(nameBuf, 0, sizeof(nameBuf));
+				WideCharToMultiByte(CP_ACP, 0, name, -1, nameBuf, XUSER_NAME_SIZE - 1, NULL, NULL);
+				memcpy(m_hostGameSessionData.szPlayers[i], nameBuf, XUSER_NAME_SIZE);
+			}
+			else
+			{
+				m_hostGameSessionData.players[i] = 0;
+				memset(m_hostGameSessionData.szPlayers[i], 0, XUSER_NAME_SIZE);
+			}
+		}
+		else
+		{
+			m_hostGameSessionData.players[i] = 0;
+			memset(m_hostGameSessionData.szPlayers[i], 0, XUSER_NAME_SIZE);
+		}
+	}
+
+	// update the LAN advertiser with current player names and count
+	WinsockNetLayer::UpdateAdvertisePlayerNames(m_hostGameSessionData.playerCount, m_hostGameSessionData.szPlayers);
+#endif
 }
 
 int CPlatformNetworkManagerStub::RemovePlayerOnSocketClosedThreadProc( void* lpParam )
@@ -757,6 +768,17 @@ void CPlatformNetworkManagerStub::SearchForGames()
 		info->data.playerCount = lanSessions[i].playerCount;
 		info->data.maxPlayers = lanSessions[i].maxPlayers;
 
+		memset(info->data.players, 0, sizeof(info->data.players));
+		memset(info->data.szPlayers, 0, sizeof(info->data.szPlayers));
+		for (int p = 0; p < MINECRAFT_NET_MAX_PLAYERS && p < lanSessions[i].playerCount; p++)
+		{
+			if (lanSessions[i].playerNames[p][0] != 0)
+			{
+				info->data.players[p] = (GameSessionUID)(p + 1); 
+				memcpy(info->data.szPlayers[p], lanSessions[i].playerNames[p], XUSER_NAME_SIZE);
+			}
+		}
+
 		info->sessionId = (SessionID)((unsigned __int64)inet_addr(lanSessions[i].hostIP) | ((unsigned __int64)lanSessions[i].hostPort << 32));
 
 		friendsSessions[0].push_back(info);
@@ -790,6 +812,21 @@ vector<FriendSessionInfo *> *CPlatformNetworkManagerStub::GetSessionList(int iPa
 
 bool CPlatformNetworkManagerStub::GetGameSessionInfo(int iPad, SessionID sessionId, FriendSessionInfo *foundSessionInfo)
 {
+#ifdef _WINDOWS64
+	for (size_t i = 0; i < friendsSessions[0].size(); i++)
+	{
+		if (friendsSessions[0][i]->sessionId == sessionId)
+		{
+			if (foundSessionInfo != NULL)
+			{
+				foundSessionInfo->sessionId = friendsSessions[0][i]->sessionId;
+				foundSessionInfo->data = friendsSessions[0][i]->data;
+				foundSessionInfo->hasPartyMember = friendsSessions[0][i]->hasPartyMember;
+			}
+			return true;
+		}
+	}
+#endif
 	return false;
 }
 
