@@ -192,7 +192,7 @@ StructurePiece *StrongholdPieces::generateAndAddPiece(StartPiece *startPiece, li
 	{
         return NULL;
     }
-    if (abs(footX - startPiece->getBoundingBox()->x0) > 3 * 16 || abs(footZ - startPiece->getBoundingBox()->z0) > 3 * 16)
+     if (abs(footX - startPiece->getBoundingBox()->x0) > 3 * 16 || abs(footZ - startPiece->getBoundingBox()->z0) > 3 * 16)
 	{
 		// Force attempt at spawning a portal room
 		if(startPiece->m_level->getOriginalSaveVersion() >= SAVE_FILE_VERSION_MOVED_STRONGHOLD && !startPiece->m_level->getLevelData()->getHasStrongholdEndPortal())
@@ -204,7 +204,7 @@ StructurePiece *StrongholdPieces::generateAndAddPiece(StartPiece *startPiece, li
 				if(piece->pieceClass != EPieceClass_PortalRoom) continue;
 
 #ifndef _CONTENT_PACKAGE
-				printf("Portal room forcing attempt\n");
+				app.DebugPrintf("Portal room forcing attempt\n");
 #endif
 				StrongholdPiece *strongholdPiece = PortalRoom::createPiece(pieces, random, footX, footY, footZ, direction, depth);
 				if (strongholdPiece != NULL)
@@ -217,7 +217,7 @@ StructurePiece *StrongholdPieces::generateAndAddPiece(StartPiece *startPiece, li
 						currentPieces.remove(piece);
 					}
 #ifndef _CONTENT_PACKAGE
-					printf("Success\n");
+					app.DebugPrintf("Success\n");
 #endif
 					return strongholdPiece;
 				}

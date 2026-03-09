@@ -790,10 +790,12 @@ int CGameNetworkManager::JoinFromInvite_SignInReturned(void *pParam,bool bContin
 
 void CGameNetworkManager::UpdateAndSetGameSessionData(INetworkPlayer *pNetworkPlayerLeaving)
 {
+#ifndef _DEDICATED_SERVER
 	Minecraft *pMinecraft = Minecraft::GetInstance();
 	TexturePack *tPack = pMinecraft->skins->getSelected();
 	s_pPlatformNetworkManager->SetSessionTexturePackParentId( tPack->getDLCParentPackId() );
 	s_pPlatformNetworkManager->SetSessionSubTexturePackId( tPack->getDLCSubPackId() );
+#endif
 
 	s_pPlatformNetworkManager->UpdateAndSetGameSessionData( pNetworkPlayerLeaving );
 }
@@ -1421,6 +1423,7 @@ void CGameNetworkManager::CreateSocket( INetworkPlayer *pNetworkPlayer, bool loc
 		// Add this user to the game server if the game is started already
 		if( g_NetworkManager.IsHost() && g_NetworkManager.IsInGameplay() )
 		{
+			app.DebugPrintf("Adding incoming socket for smallId=%d\n", pNetworkPlayer->GetSmallId());
 			Socket::addIncomingSocket(socket);
 		}
 

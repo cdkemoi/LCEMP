@@ -83,6 +83,7 @@ public:
 	static SOCKET GetSocketForSmallId(BYTE smallId);
 
 	static void HandleDataReceived(BYTE fromSmallId, BYTE toSmallId, unsigned char *data, unsigned int dataSize);
+	static void FlushPendingData();
 
 	static bool PopDisconnectedSmallId(BYTE *outSmallId);
 	static void PushFreeSmallId(BYTE smallId);
@@ -151,6 +152,9 @@ private:
 
 	static CRITICAL_SECTION s_freeSmallIdLock;
 	static std::vector<BYTE> s_freeSmallIds;
+
+	static CRITICAL_SECTION s_earlyDataLock;
+	static std::vector<BYTE> s_earlyDataBuffers[WIN64_NET_MAX_CLIENTS + 1];
 };
 
 extern bool g_Win64MultiplayerHost;

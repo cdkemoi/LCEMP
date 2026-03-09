@@ -49,6 +49,9 @@ std::vector<BYTE> WinsockNetLayer::s_pendingJoinSmallIds;
 CRITICAL_SECTION WinsockNetLayer::s_freeSmallIdLock;
 std::vector<BYTE> WinsockNetLayer::s_freeSmallIds;
 
+CRITICAL_SECTION WinsockNetLayer::s_earlyDataLock;
+std::vector<BYTE> WinsockNetLayer::s_earlyDataBuffers[WIN64_NET_MAX_CLIENTS + 1];
+
 bool g_Win64MultiplayerHost = false;
 bool g_Win64MultiplayerJoin = false;
 int g_Win64MultiplayerPort = WIN64_NET_DEFAULT_PORT;
@@ -73,6 +76,7 @@ bool WinsockNetLayer::Initialize()
 	InitializeCriticalSection(&s_disconnectLock);
 	InitializeCriticalSection(&s_pendingJoinLock);
 	InitializeCriticalSection(&s_freeSmallIdLock);
+	InitializeCriticalSection(&s_earlyDataLock);
 
 	for (int i = 0; i < WIN64_NET_MAX_CLIENTS + 1; i++)
 	{
@@ -356,6 +360,9 @@ bool WinsockNetLayer::JoinGame(const char *ip, int port)
 	}
 	s_localSmallId = assignedSmallId;
 
+	DWORD noTimeout = 0;
+	setsockopt(s_hostConnectionSocket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&noTimeout, sizeof(noTimeout));
+
 	app.DebugPrintf("Win64 LAN: Connected to %s:%d, assigned smallId=%d\n", ip, port, s_localSmallId);
 
 	s_active = true;
@@ -458,13 +465,30 @@ void WinsockNetLayer::HandleDataReceived(BYTE fromSmallId, BYTE toSmallId, unsig
 	INetworkPlayer *pPlayerFrom = g_NetworkManager.GetPlayerBySmallId(fromSmallId);
 	INetworkPlayer *pPlayerTo = g_NetworkManager.GetPlayerBySmallId(toSmallId);
 
-	if (pPlayerFrom == NULL || pPlayerTo == NULL) return;
+	if (pPlayerFrom == NULL || pPlayerTo == NULL)
+	{
+		if (s_isHost && fromSmallId > 0 && fromSmallId < WIN64_NET_MAX_CLIENTS + 1)
+		{
+			EnterCriticalSection(&s_earlyDataLock);
+			s_earlyDataBuffers[fromSmallId].insert(
+				s_earlyDataBuffers[fromSmallId].end(), data, data + dataSize);
+			LeaveCriticalSection(&s_earlyDataLock);
+		}
+		return;
+	}
 
 	if (s_isHost)
 	{
 		::Socket *pSocket = pPlayerFrom->GetSocket();
 		if (pSocket != NULL)
 			pSocket->pushDataToQueue(data, dataSize, false);
+		else
+		{
+			EnterCriticalSection(&s_earlyDataLock);
+			s_earlyDataBuffers[fromSmallId].insert(
+				s_earlyDataBuffers[fromSmallId].end(), data, data + dataSize);
+			LeaveCriticalSection(&s_earlyDataLock);
+		}
 	}
 	else
 	{
@@ -472,6 +496,26 @@ void WinsockNetLayer::HandleDataReceived(BYTE fromSmallId, BYTE toSmallId, unsig
 		if (pSocket != NULL)
 			pSocket->pushDataToQueue(data, dataSize, true);
 	}
+}
+
+void WinsockNetLayer::FlushPendingData()
+{
+	EnterCriticalSection(&s_earlyDataLock);
+	for (int i = 1; i < WIN64_NET_MAX_CLIENTS + 1; i++)
+	{
+		if (s_earlyDataBuffers[i].empty()) continue;
+
+		INetworkPlayer *pPlayer = g_NetworkManager.GetPlayerBySmallId((BYTE)i);
+		if (pPlayer == NULL) continue;
+
+		::Socket *pSocket = pPlayer->GetSocket();
+		if (pSocket == NULL) continue;
+
+		pSocket->pushDataToQueue(s_earlyDataBuffers[i].data(),
+			(DWORD)s_earlyDataBuffers[i].size(), false);
+		s_earlyDataBuffers[i].clear();
+	}
+	LeaveCriticalSection(&s_earlyDataLock);
 }
 
 DWORD WINAPI WinsockNetLayer::AcceptThreadProc(LPVOID param)
@@ -686,6 +730,11 @@ void WinsockNetLayer::CloseConnectionBySmallId(BYTE smallId)
 		app.DebugPrintf("Win64 LAN: Force-closed TCP connection for smallId=%d\n", smallId);
 	}
 	LeaveCriticalSection(&s_connectionsLock);
+
+	EnterCriticalSection(&s_earlyDataLock);
+	if (smallId < WIN64_NET_MAX_CLIENTS + 1)
+		s_earlyDataBuffers[smallId].clear();
+	LeaveCriticalSection(&s_earlyDataLock);
 }
 
 DWORD WINAPI WinsockNetLayer::ClientRecvThreadProc(LPVOID param)

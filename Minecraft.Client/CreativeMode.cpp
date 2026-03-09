@@ -1,5 +1,7 @@
 #include "stdafx.h"
 #include "CreativeMode.h"
+#include "MultiPlayerLevel.h"
+#include "MultiPlayerLocalPlayer.h"
 #include "User.h"
 #include "LocalPlayer.h"
 #include "..\Minecraft.World\\net.minecraft.world.entity.player.h"
@@ -66,12 +68,12 @@ bool CreativeMode::useItemOn(shared_ptr<Player> player, Level *level, shared_ptr
 	int t = level->getTile(x, y, z);
 	if (t > 0)
 	{
-		if (Tile::tiles[t]->use(level, x, y, z, player)) return true;
+		if (Tile::tiles[t]->use(level, x, y, z, player, face, 0.0f, 0.0f, 0.0f)) return true;
 	}
 	if (item == NULL) return false;
 	int aux = item->getAuxValue();
 	int count = item->count;
-	bool success = item->useOn(player, level, x, y, z, face);
+	bool success = item->useOn(player, level, x, y, z, face, 0.0f, 0.0f, 0.0f);
 	item->setAuxValue(aux);
 	item->count = count;
 	return success;

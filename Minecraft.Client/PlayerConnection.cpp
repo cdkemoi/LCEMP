@@ -118,7 +118,7 @@ void PlayerConnection::disconnect(DisconnectPacket::eDisconnectReason reason)
 		return;
 	}
 
-	app.DebugPrintf("PlayerConnection disconect reason: %d\n", reason );
+	app.DebugPrintf("PlayerConnection disconnect reason: %d", reason );
 	player->disconnect();
 
 	// 4J Stu - Need to remove the player from the receiving list before their socket is NULLed so that we can find another player on their system
@@ -130,10 +130,16 @@ void PlayerConnection::disconnect(DisconnectPacket::eDisconnectReason reason)
 	if(getWasKicked())
 	{
 		server->getPlayers()->broadcastAll( shared_ptr<ChatPacket>( new ChatPacket(player->name, ChatPacket::e_ChatPlayerKickedFromGame) ) );
+#ifdef _DEDICATED_SERVER
+		app.DebugPrintf("%ls was kicked from the game", player->name.c_str());
+#endif
 	}
 	else
 	{
 		server->getPlayers()->broadcastAll( shared_ptr<ChatPacket>( new ChatPacket(player->name, ChatPacket::e_ChatPlayerLeftGame) ) );
+#ifdef _DEDICATED_SERVER
+		app.DebugPrintf("%ls left the game", player->name.c_str());
+#endif
 	}
 	
 	server->getPlayers()->remove(player);

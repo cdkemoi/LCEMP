@@ -5046,11 +5046,18 @@ void Minecraft::handleClientTextureReceived(const wstring &textureName)
 
 unsigned int Minecraft::getCurrentTexturePackId()
 {
+#ifdef _DEDICATED_SERVER
+	return 0;
+#else
 	return skins->getSelected()->getId();
+#endif
 }
 
 ColourTable *Minecraft::getColourTable()
 {
+#ifdef _DEDICATED_SERVER
+	return NULL;
+#else
 	TexturePack *selected = skins->getSelected();
 
 	ColourTable *colours = selected->getColourTable();
@@ -5061,6 +5068,7 @@ ColourTable *Minecraft::getColourTable()
 	}
 
 	return colours;
+#endif
 }
 
 #if defined __ORBIS__

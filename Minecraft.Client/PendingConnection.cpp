@@ -89,6 +89,7 @@ void PendingConnection::handlePreLogin(shared_ptr<PreLoginPacket> packet)
         return;
     }
 //	printf("Server: handlePreLogin\n");
+	app.DebugPrintf("PreLogin received from \"%ls\"\n", packet->loginKey.c_str());
 	name = packet->loginKey; // 4J Stu - Change from the login packet as we know better on client end during the pre-login packet
 	sendPreLoginResponse();
 }
@@ -143,6 +144,7 @@ void PendingConnection::sendPreLoginResponse()
 
 void PendingConnection::handleLogin(shared_ptr<LoginPacket> packet)
 {
+	app.DebugPrintf("Login received from \"%ls\" (protocol %d)\n", name.c_str(), packet->clientVersion);
 //	printf("Server: handleLogin\n");
     //name = packet->userName;
     if (packet->clientVersion != SharedConstants::NETWORK_PROTOCOL_VERSION)
