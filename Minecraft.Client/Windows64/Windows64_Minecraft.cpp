@@ -1039,13 +1039,13 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 		}
 	}
 
-	// set a callback for the default player options to be set when there is no profile data for the player
+	// Set a callback for the default player options to be set when there is no profile data for the player
 	ProfileManager.SetDefaultOptionsCallback(&CConsoleMinecraftApp::DefaultOptionsCallback,(LPVOID)&app);
 #if 0
-	// set a callback to deal with old profile versions needing updated to new versions
+	// Set a callback to deal with old profile versions needing updated to new versions
 	ProfileManager.SetOldProfileVersionCallback(&CConsoleMinecraftApp::OldProfileVersionCallback,(LPVOID)&app);
 
-	//sSet a callback for when there is a read error on profile data
+	// Set a callback for when there is a read error on profile data
 	ProfileManager.SetProfileReadErrorCallback(&CConsoleMinecraftApp::ProfileReadErrorCallback,(LPVOID)&app);
 
 #endif
