@@ -259,7 +259,7 @@ void CMinecraftApp::DebugPrintf(const char *szFormat, ...)
 		time_t now = time(NULL);
 		struct tm t;
 		localtime_s(&t, &now);
-		printf("[%02d:%02d:%02d] [Server thread/INFO]: %s\n", t.tm_hour, t.tm_min, t.tm_sec, buf);
+		printf("%04d-%02d-%02d %02d:%02d:%02d [INFO] %s\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, buf);
 		fflush(stdout);
 	}
 #endif
